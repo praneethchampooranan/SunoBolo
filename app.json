@@ -1,5 +1,7 @@
 {
   "expo": {
+    "scheme": "sunobolo",
+    "platforms": ["ios", "android", "web"],
     "name": "SunoBoloExpo",
     "slug": "SunoBoloExpo",
     "version": "1.0.0",

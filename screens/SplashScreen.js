@@ -22,7 +22,7 @@ export default function SplashScreen({ navigation }) {
       <Animated.View style={{ opacity: fadeAnim }}>
         {!imageError ? (
           <Image
-            source={require('../assets/sunoBolo-logo-white.png')}
+            source={require('../assets/sunobolo_final.png')}
             style={styles.logoImg}
             resizeMode="contain"
             onError={() => setImageError(true)}

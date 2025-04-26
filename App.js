@@ -1,29 +1,53 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import { supabase } from './utils/supabase';
+import AuthScreen from './screens/AuthScreen';
+import HomeScreen from './screens/HomeScreen';
 import RootNavigator from './navigation/RootNavigator';
 import { ThemeProvider } from './utils/ThemeContext';
 import { LanguageProvider } from './utils/LanguageContext';
+// import ThemeProvider from './providers/ThemeProvider'; // Uncomment if you have a ThemeProvider
+// import LanguageProvider from './providers/LanguageProvider'; // Uncomment if you have a LanguageProvider
 
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
   return (
     <ThemeProvider>
       <LanguageProvider>
         <NavigationContainer>
-          <RootNavigator />
+          {session ? (
+            <RootNavigator />
+          ) : (
+            <AuthScreen onAuthSuccess={() => {
+              supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+            }} />
+          )}
         </NavigationContainer>
       </LanguageProvider>
     </ThemeProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
