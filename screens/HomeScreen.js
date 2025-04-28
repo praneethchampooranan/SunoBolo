@@ -1,7 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-export default function HomeScreen() {
+import { useFocusEffect } from '@react-navigation/native';
+import { useRef } from 'react';
+
+export default function HomeScreen(props) {
+  const reloadChatsRef = useRef(null);
+  // If setReloadChats is passed, save the callback
+  if (props.setReloadChats) props.setReloadChats(fn => { reloadChatsRef.current = fn; });
+  useFocusEffect(
+    React.useCallback(() => {
+      if (reloadChatsRef.current) reloadChatsRef.current();
+    }, [])
+  );
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
       <Text style={{ fontSize: 32, color: '#2563eb' }}>Hello, Friend</Text>
