@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { archiveAllChats, deleteAllChats } from '../navigation/CustomDrawerContent';
+import { useChatContext } from '../context/ChatContext';
 import { ThemeContext } from '../utils/ThemeContext';
 import { LanguageContext } from '../utils/LanguageContext';
 import { t } from '../utils/translations';
@@ -10,18 +10,105 @@ export default function DataControlScreen({ navigation }) {
   const { theme } = useContext(ThemeContext);
   const { language } = useContext(LanguageContext);
 
-  const handleArchiveAll = async () => {
-    await archiveAllChats();
-    Alert.alert(t(language, 'archiveAll'), t(language, 'allChatsArchived'));
-    navigation.goBack();
+  const { archiveAllChats, deleteAllChats } = useChatContext();
+
+  const handleArchiveAll = () => {
+    Alert.alert(
+      'Archive All Chats',
+      'Are you sure you want to archive all chats? This will move all your active chats to the archive. You can restore them from the archive later.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          style: 'destructive',
+          onPress: () => {
+            archiveAllChats();
+            Alert.alert(t(language, 'archiveAll'), t(language, 'allChatsArchived'));
+            navigation.goBack();
+          }
+        }
+      ]
+    );
   };
-  const handleDeleteAll = async () => {
-    await deleteAllChats();
-    Alert.alert(t(language, 'deleteAll'), t(language, 'allChatsDeleted'));
-    navigation.goBack();
+
+  const handleDeleteAll = () => {
+    Alert.alert(
+      'Delete All Chats',
+      'Are you sure you want to permanently delete all chats? This cannot be undone and all your chat history will be lost.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteAllChats();
+            Alert.alert(t(language, 'deleteAll'), t(language, 'allChatsDeleted'));
+            navigation.goBack();
+          }
+        }
+      ]
+    );
   };
+
+  const { user } = require('../utils/useAuth').useAuth();
   const handleDeleteAccount = () => {
-    Alert.alert(t(language, 'deleteAccount'), t(language, 'accountDeletionNotImplemented'));
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account and all data? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // 1. Delete user from Supabase via Edge Function
+              let supabaseDeleteError = null;
+              if (user && user.id) {
+                try {
+                  const response = await fetch('https://vucwanwlpkcwdbbjhovm.supabase.co/functions/v1/delete-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: user.id })
+                  });
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    supabaseDeleteError = errorText || 'Failed to delete user from Supabase';
+                  }
+                } catch (err) {
+                  supabaseDeleteError = err.message;
+                }
+              }
+              // 2. Remove all relevant AsyncStorage keys
+              const keys = [
+                'chats',
+                'archivedChats',
+                'messages',
+                'archivedChatsMessages',
+                'language',
+                'theme',
+                'profile',
+                'hasLaunched',
+              ];
+              await Promise.all(keys.map(k => AsyncStorage.removeItem(k)));
+              // 3. Sign out from Supabase
+              if (typeof supabase !== 'undefined') {
+                await supabase.auth.signOut();
+              }
+              // 4. Navigate to onboarding/auth screen (reset stack)
+              navigation.reset({ index: 0, routes: [{ name: 'Splash' }] });
+              if (supabaseDeleteError) {
+                setTimeout(() => {
+                  Alert.alert('Warning', 'Account deleted locally, but failed to delete from Supabase: ' + supabaseDeleteError);
+                }, 1000);
+              }
+            } catch (e) {
+              Alert.alert('Error', 'Failed to delete account. Please try again.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (

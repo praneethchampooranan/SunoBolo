@@ -27,6 +27,10 @@ export default function AuthScreen({ onAuthSuccess }) {
         if (result.error) throw result.error;
         setInfo('Check your email for a confirmation link.');
         setShowResend(true);
+        // Navigate to ProfileInfoScreen after signup (email/phone shown, name/DOB collected)
+        if (result.data?.user) {
+          onAuthSuccess('ProfileInfo', { email: result.data.user.email, phone: result.data.user.phone });
+        }
       } else {
         result = await supabase.auth.signInWithPassword({ email, password });
         if (result.error) throw result.error;

@@ -7,6 +7,7 @@ import HomeScreen from './screens/HomeScreen';
 import RootNavigator from './navigation/RootNavigator';
 import { ThemeProvider } from './utils/ThemeContext';
 import { LanguageProvider } from './utils/LanguageContext';
+import { ChatProvider } from './context/ChatContext';
 // import ThemeProvider from './providers/ThemeProvider'; // Uncomment if you have a ThemeProvider
 // import LanguageProvider from './providers/LanguageProvider'; // Uncomment if you have a LanguageProvider
 
@@ -38,15 +39,23 @@ export default function App() {
   return (
     <ThemeProvider>
       <LanguageProvider>
-        <NavigationContainer>
-          {session ? (
-            <RootNavigator />
-          ) : (
-            <AuthScreen onAuthSuccess={() => {
-              supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-            }} />
-          )}
-        </NavigationContainer>
+        <ChatProvider>
+          <NavigationContainer>
+            {session ? (
+              <RootNavigator />
+            ) : (
+              <AuthScreen onAuthSuccess={(screen, params) => {
+                if (screen === 'ProfileInfo') {
+                  // Show profile info screen after signup
+                  setSession('pending_profile');
+                  global.__PROFILE_INFO_PARAMS__ = params;
+                } else {
+                  supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+                }
+              }} />
+            )}
+          </NavigationContainer>
+        </ChatProvider>
       </LanguageProvider>
     </ThemeProvider>
   );

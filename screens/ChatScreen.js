@@ -60,7 +60,19 @@ export default function ChatScreen({ navigation, route }) {
                 ]) },
                 { text: 'Archive Chat', onPress: async () => {
                     if (!chatId) return Alert.alert('Error', 'No chat ID found.');
-                    await archiveChat(chatId);
+                    if (typeof navigation?.dangerouslyGetParent === 'function') {
+                      const parent = navigation.dangerouslyGetParent();
+                      if (parent && typeof parent.setParams === 'function' && typeof parent.getParam === 'function') {
+                        const setArchivedChats = parent.getParam('setArchivedChats');
+                        await archiveChat(chatId, setArchivedChats);
+                      } else {
+                        await archiveChat(chatId);
+                      }
+                    } else if (typeof navigation?.setArchivedChats === 'function') {
+                      await archiveChat(chatId, navigation.setArchivedChats);
+                    } else {
+                      await archiveChat(chatId);
+                    }
                     Alert.alert('Chat Archived', 'This chat has been archived and will be visible in Settings > Archived Chats.');
                     navigation.goBack();
                   }
@@ -90,7 +102,18 @@ export default function ChatScreen({ navigation, route }) {
       try {
         const all = await AsyncStorage.getItem('messages');
         const allMessages = all ? JSON.parse(all) : {};
-        setMessages(allMessages[chatId] || []);
+        if (allMessages[chatId] && allMessages[chatId].length > 0) {
+          setMessages(allMessages[chatId]);
+        } else {
+          // If no messages exist, show the welcome message in the selected language
+          setMessages([
+            {
+              sender: 'ai',
+              text: t(language, 'introMessage'),
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        }
       } catch {
         setMessages([]);
       } finally {
@@ -112,19 +135,23 @@ export default function ChatScreen({ navigation, route }) {
     })();
   }, [messages, chatId]);
   useEffect(() => {
-    if (!user) return;
+    if (!user || !chatId) return;
     const fetchMessages = async () => {
       setLoadingHistory(true);
       let { data, error } = await supabase
         .from('messages')
         .select('*')
         .eq('user_id', user.id)
+        .eq('chat_id', chatId)
         .order('created_at', { ascending: true });
-      if (!error && data) setMessages(data);
+      if (!error && data) {
+        console.log('Supabase messages for chatId', chatId, data);
+        setMessages(data);
+      }
       setLoadingHistory(false);
     };
     fetchMessages();
-  }, [user]);
+  }, [user, chatId]);
 
   // Send message and persist to AsyncStorage per chat
   const handleSend = async () => {
@@ -255,7 +282,7 @@ export default function ChatScreen({ navigation, route }) {
         />
       )}
       {loadingAI && (
-        <View style={styles.loadingAI}><ActivityIndicator size="small" color={isDark ? '#8ab4f8' : '#2563eb'} /><Text style={{ marginLeft: 8, color: isDark ? '#fff' : '#222' }}>AI is typing…</Text></View>
+        <View style={styles.loadingAI}><ActivityIndicator size="small" color={isDark ? '#8ab4f8' : '#2563eb'} /><Text style={{ marginLeft: 8, color: isDark ? '#fff' : '#222' }}>SunoBolo is typing…</Text></View>
       )}
     </View>
     <KeyboardAvoidingView

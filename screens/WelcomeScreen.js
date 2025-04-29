@@ -1,13 +1,20 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 
-export default function WelcomeScreen({ onContinue }) {
+import { useNavigation } from '@react-navigation/native';
+
+export default function WelcomeScreen() {
+  const navigation = useNavigation();
   return (
     <View style={styles.container}>
       <Image source={require('../assets/sunobolo_final.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.title}>Welcome to SunoBolo</Text>
       <Text style={styles.subtitle}>Your Multilingual AI Chat Companion</Text>
-      <TouchableOpacity style={styles.button} onPress={onContinue} accessibilityRole="button">
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Flow' }] })}
+        accessibilityRole="button"
+      >
         <Text style={styles.buttonText}>Get Started</Text>
       </TouchableOpacity>
     </View>

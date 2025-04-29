@@ -1,9 +1,9 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, useColorScheme, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../utils/ThemeContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useChatContext } from '../context/ChatContext';
 import { t } from '../utils/translations';
 
 function getInitials(name) {
@@ -33,7 +33,7 @@ export async function deleteAllChats() {
   await AsyncStorage.setItem('chats', JSON.stringify([]));
   await AsyncStorage.setItem('archivedChats', JSON.stringify([]));
 }
-export async function archiveChat(chatId) {
+export async function archiveChat(chatId, setArchivedChatsCallback) {
   const stored = await AsyncStorage.getItem('chats');
   const archived = await AsyncStorage.getItem('archivedChats');
   let chats = stored ? JSON.parse(stored) : [];
@@ -45,16 +45,22 @@ export async function archiveChat(chatId) {
     chats.splice(idx, 1);
     await AsyncStorage.setItem('archivedChats', JSON.stringify(arch));
     await AsyncStorage.setItem('chats', JSON.stringify(chats));
+    console.log('archiveChat: archivedChats after update:', arch);
+    console.log('archiveChat: chats after update:', chats);
+    if (typeof setArchivedChatsCallback === 'function') setArchivedChatsCallback(arch);
     // Move messages as well
     const allMessagesRaw = await AsyncStorage.getItem('messages');
     const allMessages = allMessagesRaw ? JSON.parse(allMessagesRaw) : {};
     const archivedMessagesRaw = await AsyncStorage.getItem('archivedChatsMessages');
     const archivedMessages = archivedMessagesRaw ? JSON.parse(archivedMessagesRaw) : {};
     if (allMessages[chatId]) {
+      console.log('archiveChat: moving messages for chatId', chatId, allMessages[chatId]);
       archivedMessages[chatId] = allMessages[chatId];
       delete allMessages[chatId];
       await AsyncStorage.setItem('messages', JSON.stringify(allMessages));
       await AsyncStorage.setItem('archivedChatsMessages', JSON.stringify(archivedMessages));
+      console.log('archiveChat: archivedChatsMessages after update:', archivedMessages);
+      console.log('archiveChat: messages after update:', allMessages);
     }
   }
 }
@@ -75,6 +81,19 @@ export async function unarchiveChat(chatId, setChatsCallback) {
     arch.splice(idx, 1);
     await AsyncStorage.setItem('archivedChats', JSON.stringify(arch));
     await AsyncStorage.setItem('chats', JSON.stringify(chats));
+    // Move messages back from archivedChatsMessages to messages
+    const archivedMessagesRaw = await AsyncStorage.getItem('archivedChatsMessages');
+    const archivedMessages = archivedMessagesRaw ? JSON.parse(archivedMessagesRaw) : {};
+    const allMessagesRaw = await AsyncStorage.getItem('messages');
+    const allMessages = allMessagesRaw ? JSON.parse(allMessagesRaw) : {};
+    if (archivedMessages[chatId]) {
+      allMessages[chatId] = archivedMessages[chatId];
+      delete archivedMessages[chatId];
+      await AsyncStorage.setItem('messages', JSON.stringify(allMessages));
+      await AsyncStorage.setItem('archivedChatsMessages', JSON.stringify(archivedMessages));
+    }
+    console.log('unarchiveChat: archivedChats after update:', arch);
+    console.log('unarchiveChat: chats after update:', chats);
     if (typeof setChatsCallback === 'function') setChatsCallback(chats);
   }
 }
@@ -94,60 +113,36 @@ export async function getArchivedChats() {
 export default function CustomDrawerContent(props) {
   const { theme, toggleTheme } = useContext(ThemeContext);
   const isDark = theme === 'dark';
-  const [search, setSearch] = useState('');
-  const [chats, setChats] = useState([]);
-  const [archivedChats, setArchivedChats] = useState([]);
-
-  // Helper to reload chats and archivedChats from AsyncStorage
-  const reloadChats = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('chats');
-      if (stored) setChats(JSON.parse(stored));
-      const archived = await AsyncStorage.getItem('archivedChats');
-      if (archived) setArchivedChats(JSON.parse(archived));
-    } catch {}
-  };
-
-  // Load chats and archivedChats from AsyncStorage on mount and whenever drawer is focused
-  const { useFocusEffect } = require('@react-navigation/native');
-  useFocusEffect(
-    React.useCallback(() => {
-      reloadChats();
-    }, [])
-  );
-  // Expose reloadChats to props for other screens
-  if (props.setReloadChats) props.setReloadChats(() => reloadChats);
-
-  // Persist chats to AsyncStorage on change
-  useEffect(() => {
-    AsyncStorage.setItem('chats', JSON.stringify(chats));
-  }, [chats]);
-  useEffect(() => {
-    AsyncStorage.setItem('archivedChats', JSON.stringify(archivedChats));
-  }, [archivedChats]);
+  const [search, setSearch] = React.useState('');
+  const { chats, archivedChats, addChat, deleteChat, archiveChat, unarchiveChat, renameChat } = useChatContext();
   const user = props?.user || { name: 'Friend' };
   const initials = getInitials(user?.name);
 
   const filteredChats = chats.filter(c => c.title.toLowerCase().includes(search.toLowerCase()));
 
+  const { language } = useContext(require('../utils/LanguageContext').LanguageContext);
 
-const { language } = useContext(require('../utils/LanguageContext').LanguageContext);
-
-const handleAddChat = async () => {
+  const handleAddChat = async () => {
+    // Always generate a fresh unique chat object
+    // Always use 'New Chat' as the title for new chats (allowing duplicates)
     const newChat = { id: generateId(), title: 'New Chat' };
-    setChats([newChat, ...chats]);
+    addChat(newChat);
     setSearch('');
-    // Initialize unique message history for this chat with intro message
+    // Always set unique welcome message in selected language for every new chat
     try {
       const allMessagesRaw = await AsyncStorage.getItem('messages');
       const allMessages = allMessagesRaw ? JSON.parse(allMessagesRaw) : {};
-      allMessages[newChat.id] = [{
-        sender: 'ai',
-        text: t(language, 'introMessage'),
-        created_at: new Date().toISOString(),
-      }];
+      allMessages[newChat.id] = [
+        {
+          sender: 'ai',
+          text: t(language, 'introMessage'),
+          created_at: new Date().toISOString(),
+        }
+      ];
       await AsyncStorage.setItem('messages', JSON.stringify(allMessages));
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to set welcome message for new chat:', e);
+    }
     // Navigate to the new chat
     props.navigation.navigate('Chat', { chatId: newChat.id });
   };
@@ -186,17 +181,16 @@ const handleAddChat = async () => {
                     { text: 'Rename Chat', onPress: () => {
                       Alert.prompt('Rename Chat', 'Enter a new name for this chat:', (newTitle) => {
                         if (newTitle && newTitle.trim()) {
-                          setChats(prev => prev.map(c => c.id === item.id ? { ...c, title: newTitle.trim() } : c));
+                          renameChat(item.id, newTitle.trim());
                         }
                       }, 'plain-text', item.title);
                     }},
                     { text: 'Delete Chat', style: 'destructive', onPress: () => Alert.alert('Delete Chat', 'Are you sure you want to delete this chat?', [
                       { text: 'Cancel', style: 'cancel' },
-                      { text: 'Delete', style: 'destructive', onPress: () => setChats(prev => prev.filter(c => c.id !== item.id)) }
+                      { text: 'Delete', style: 'destructive', onPress: () => deleteChat(item.id) }
                     ]) },
-                    { text: 'Archive Chat', onPress: async () => {
-                      await archiveChat(item.id);
-                      setChats(prev => prev.filter(c => c.id !== item.id));
+                    { text: 'Archive Chat', onPress: () => {
+                      archiveChat(item.id);
                       Alert.alert('Chat Archived', 'This chat has been archived and will be visible in Settings > Archived Chats.');
                     }},
                     { text: 'Cancel', style: 'cancel' },

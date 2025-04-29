@@ -6,13 +6,16 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../utils/supabase';
 import { upsertProfile } from '../utils/profile';
 
-export default function ProfileInfoScreen() {
+export default function ProfileInfoScreen({ route }) {
+  const params = route?.params || global.__PROFILE_INFO_PARAMS__ || {};
   const [name, setName] = useState('');
   const [birthdate, setBirthdate] = useState(null);
   const [showDate, setShowDate] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
+  const email = params.email || '';
+  const phone = params.phone || '';
 
   const handleSave = async () => {
     if (!name.trim() || !birthdate) {
@@ -29,7 +32,7 @@ export default function ProfileInfoScreen() {
         return;
       }
       const userId = session.user.id;
-      const success = await upsertProfile(userId, { name: name.trim(), birthdate });
+      const success = await upsertProfile(userId, { name: name.trim(), birthdate, email, phone });
       if (success) {
         navigation.reset({ index: 0, routes: [{ name: 'Home', params: { user: { name: name.trim(), birthdate } } }] });
       } else {
@@ -52,6 +55,16 @@ export default function ProfileInfoScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Tell us about yourself</Text>
+      <View style={styles.infoBox}>
+        <Text style={styles.infoLabel}>Email</Text>
+        <Text style={styles.infoValue}>{email}</Text>
+      </View>
+      {phone ? (
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Phone</Text>
+          <Text style={styles.infoValue}>{phone}</Text>
+        </View>
+      ) : null}
       <TextInput
         style={styles.input}
         placeholder="Full Name"

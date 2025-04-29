@@ -13,8 +13,20 @@ export default function ArchivedChatViewScreen({ route, navigation }) {
       try {
         const all = await AsyncStorage.getItem('archivedChatsMessages');
         const allMessages = all ? JSON.parse(all) : {};
-        setMessages(allMessages[chat.id] || []);
-      } catch {
+        const archived = allMessages[chat.id];
+        console.log('ArchivedChatViewScreen: archivedChatsMessages for chat.id', chat.id, archived);
+        if (archived && archived.length > 0) {
+          setMessages(archived);
+        } else {
+          // Fallback: check messages (active chats) in case archiving failed
+          const allActiveRaw = await AsyncStorage.getItem('messages');
+          const allActive = allActiveRaw ? JSON.parse(allActiveRaw) : {};
+          const fallback = allActive[chat.id];
+          console.log('ArchivedChatViewScreen: fallback messages for chat.id', chat.id, fallback);
+          setMessages(fallback || []);
+        }
+      } catch (e) {
+        console.log('ArchivedChatViewScreen: error loading messages', e);
         setMessages([]);
       } finally {
         setLoading(false);
